@@ -1,8 +1,6 @@
 (function() {
-  // Prevent double injection
   if (document.getElementById('_ann_panel')) return;
 
-  /* ---- STYLES ---- */
   var style = document.createElement('style');
   style.textContent = [
     '#_ann_overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2147483640;opacity:0;pointer-events:none;transition:opacity .3s}',
@@ -39,7 +37,10 @@
     '#_ann_btns{display:flex;gap:8px;margin-top:8px}',
     '#_ann_save{flex:1;background:#6366f1;color:#fff;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:-apple-system,sans-serif}',
     '#_ann_cancel{flex:1;background:#f3f4f6;color:#374151;border:none;padding:12px;border-radius:8px;font-size:14px;cursor:pointer;font-family:-apple-system,sans-serif}',
-    '#_ann_badge{position:fixed;top:12px;right:12px;background:#fef08a;color:#713f12;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;border:1px solid #eab308;cursor:pointer;z-index:2147483638;font-family:-apple-system,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15)}',
+    '#_ann_toolbar{position:fixed;top:12px;right:12px;display:flex;align-items:center;gap:8px;z-index:2147483645}',
+    '#_ann_launch{background:#6366f1;color:#fff;border:none;padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;font-family:-apple-system,sans-serif;box-shadow:0 2px 8px rgba(99,102,241,.4)}',
+    '#_ann_launch.active{background:#dc2626;box-shadow:0 2px 8px rgba(220,38,38,.4)}',
+    '#_ann_badge{background:#fef08a;color:#713f12;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;border:1px solid #eab308;cursor:pointer;font-family:-apple-system,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15)}',
     '.ann-sticky{position:absolute;background:#fef08a;border:1px solid #eab308;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:600;font-family:-apple-system,sans-serif;max-width:160px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:2147483630;line-height:1.3;color:#713f12;cursor:pointer;pointer-events:auto}',
     '._ann_nc{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;overflow:hidden}',
     '._ann_nc.op{box-shadow:0 4px 14px rgba(99,102,241,.12);border-color:#c7d2fe}',
@@ -56,15 +57,19 @@
     '._ann_ndel{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;float:right;font-family:-apple-system,sans-serif}',
     '._ann_empty{text-align:center;color:#9ca3af;font-size:13px;padding:60px 20px;line-height:1.6}',
     'body.ann-mode *{cursor:crosshair !important}',
-    'body.ann-mode #_ann_panel,body.ann-mode #_ann_panel *,body.ann-mode #_ann_badge,body.ann-mode #_ann_overlay,body.ann-mode #_ann_drawer,body.ann-mode #_ann_drawer *{cursor:default !important}'
+    'body.ann-mode #_ann_toolbar,body.ann-mode #_ann_toolbar *,body.ann-mode #_ann_panel,body.ann-mode #_ann_panel *,body.ann-mode #_ann_overlay,body.ann-mode #_ann_drawer,body.ann-mode #_ann_drawer *{cursor:default !important}'
   ].join('');
   document.head.appendChild(style);
 
-  /* ---- DOM ---- */
-  // Floating badge (notes counter)
+  // Toolbar (launch + badge)
+  var toolbar = el('div', {id:'_ann_toolbar'});
   var badge = el('div', {id:'_ann_badge'}, '0 notes');
   badge.onclick = function() { openDrawer(0); };
-  document.body.appendChild(badge);
+  var launchBtn = el('button', {id:'_ann_launch'}, 'Launch');
+  launchBtn.onclick = toggleAnnotator;
+  toolbar.appendChild(badge);
+  toolbar.appendChild(launchBtn);
+  document.body.appendChild(toolbar);
 
   // Bottom panel
   var panel = el('div', {id:'_ann_panel'});
@@ -84,12 +89,10 @@
   ].join('');
   document.body.appendChild(panel);
 
-  // Drawer overlay
   var overlay = el('div', {id:'_ann_overlay'});
   overlay.onclick = closeDrawer;
   document.body.appendChild(overlay);
 
-  // Notes drawer
   var drawer = el('div', {id:'_ann_drawer'});
   drawer.innerHTML = [
     '<div id="_ann_dh">',
@@ -101,20 +104,14 @@
   ].join('');
   document.body.appendChild(drawer);
 
-  /* ---- EVENTS ---- */
   g('_ann_ttoggle').onclick = toggleTree;
   g('_ann_save').onclick = saveNote;
   g('_ann_cancel').onclick = closePanel;
   g('_ann_dclose').onclick = closeDrawer;
   g('_ann_export').onclick = exportNotes;
-
   document.addEventListener('click', onPageClick, true);
 
-  // Auto-open panel
-  openPanel();
-
-  /* ---- STATE ---- */
-  var isOn = true;
+  var isOn = false;
   var treeOpen = false;
   var primaryEl = null;
   var secondaryEl = null;
@@ -122,17 +119,28 @@
   var notes = [];
   var openCardId = null;
 
-  /* ---- PANEL ---- */
+  function toggleAnnotator() {
+    if (isOn) {
+      closePanel();
+    } else {
+      openPanel();
+    }
+  }
+
   function openPanel() {
     isOn = true;
     document.body.classList.add('ann-mode');
     g('_ann_panel').classList.add('on');
+    g('_ann_launch').textContent = 'Stop';
+    g('_ann_launch').classList.add('active');
   }
 
   function closePanel() {
     isOn = false;
     document.body.classList.remove('ann-mode');
     g('_ann_panel').classList.remove('on');
+    g('_ann_launch').textContent = 'Launch';
+    g('_ann_launch').classList.remove('active');
     g('_ann_info').textContent = 'Tap any element on the page';
     g('_ann_title').value = '';
     g('_ann_desc').value = '';
@@ -152,18 +160,16 @@
       e.style.outlineOffset = '';
       e.style.background = '';
     });
+    if (primaryEl) { primaryEl.style.outline = ''; primaryEl.style.outlineOffset = ''; }
+    if (secondaryEl) { secondaryEl.style.outline = ''; secondaryEl.style.outlineOffset = ''; secondaryEl.style.background = ''; }
   }
 
-  /* ---- CLICK ON PAGE ---- */
   function onPageClick(e) {
     if (!isOn) return;
-    var panelEl = g('_ann_panel');
-    var drawerEl = g('_ann_drawer');
-    var badgeEl = g('_ann_badge');
-    if (panelEl && panelEl.contains(e.target)) return;
-    if (drawerEl && drawerEl.contains(e.target)) return;
-    if (badgeEl && badgeEl.contains(e.target)) return;
-    if (document.querySelectorAll('.ann-sticky') && e.target.classList && e.target.classList.contains('ann-sticky')) return;
+    if (g('_ann_panel').contains(e.target)) return;
+    if (g('_ann_drawer').contains(e.target)) return;
+    if (g('_ann_toolbar').contains(e.target)) return;
+    if (e.target.classList && e.target.classList.contains('ann-sticky')) return;
     e.preventDefault();
     e.stopPropagation();
     clearHL();
@@ -195,7 +201,6 @@
     }
   }
 
-  /* ---- TREE ---- */
   function toggleTree() {
     treeOpen = !treeOpen;
     g('_ann_tree').classList.toggle('on', treeOpen);
@@ -226,11 +231,7 @@
   window._annSelectTree = function(depth) {
     var target = ancestors[depth];
     if (!target || target === primaryEl) return;
-    if (secondaryEl) {
-      secondaryEl.style.outline = '';
-      secondaryEl.style.outlineOffset = '';
-      secondaryEl.style.background = '';
-    }
+    if (secondaryEl) { secondaryEl.style.outline = ''; secondaryEl.style.outlineOffset = ''; secondaryEl.style.background = ''; }
     secondaryEl = target;
     secondaryEl.style.outline = '2px solid #f59e0b';
     secondaryEl.style.outlineOffset = '2px';
@@ -239,22 +240,18 @@
     renderTree();
   };
 
-  /* ---- SAVE ---- */
   function saveNote() {
     var title = g('_ann_title').value.trim();
     var desc = g('_ann_desc').value.trim();
     var target = secondaryEl || primaryEl;
     if (!title) { alert('Please add a title'); return; }
     if (!target) { alert('Please tap an element first'); return; }
-
     var tag = target.tagName.toLowerCase();
     var cls = (target.className || '').trim();
     var eid = target.id || '';
     var selector = (eid ? '#' + eid : '') + (cls ? '.' + cls.split(/\s+/).join('.') : '') || tag;
     var noteId = Date.now();
-
     notes.push({ id: noteId, title: title, desc: desc, selector: selector, tag: tag, cls: cls, timestamp: new Date().toISOString() });
-
     var sticky = document.createElement('div');
     sticky.className = 'ann-sticky';
     sticky.textContent = title;
@@ -264,7 +261,6 @@
     sticky.style.top = (window.scrollY + rect.top) + 'px';
     sticky.style.left = Math.min(window.scrollX + rect.right + 8, window.innerWidth - 170) + 'px';
     document.body.appendChild(sticky);
-
     refreshBadge();
     g('_ann_title').value = '';
     g('_ann_desc').value = '';
@@ -280,7 +276,6 @@
     g('_ann_export').disabled = n === 0;
   }
 
-  /* ---- DRAWER ---- */
   function openDrawer(focusId) {
     g('_ann_overlay').classList.add('on');
     g('_ann_drawer').classList.add('on');
@@ -303,7 +298,7 @@
   function renderDrawer() {
     var list = g('_ann_dlist');
     if (notes.length === 0) {
-      list.innerHTML = '<div class="_ann_empty">&#128221;<br><br>No notes yet.<br>Tap elements to add notes.</div>';
+      list.innerHTML = '<div class="_ann_empty">&#128221;<br><br>No notes yet.<br>Launch annotator and tap elements.</div>';
       return;
     }
     var html = '';
@@ -340,17 +335,10 @@
     renderDrawer();
   };
 
-  /* ---- EXPORT ---- */
   function exportNotes() {
     if (!notes.length) return;
-    var data = {
-      url: window.location.href,
-      exported: new Date().toISOString(),
-      count: notes.length,
-      notes: notes.map(function(n) {
-        return { title: n.title, description: n.desc, selector: n.selector, tag: n.tag, cls: n.cls, timestamp: n.timestamp };
-      })
-    };
+    var data = { url: window.location.href, exported: new Date().toISOString(), count: notes.length,
+      notes: notes.map(function(n) { return { title: n.title, description: n.desc, selector: n.selector, tag: n.tag, cls: n.cls, timestamp: n.timestamp }; }) };
     var json = JSON.stringify(data, null, 2);
     var btn = g('_ann_export');
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -373,7 +361,6 @@
     setTimeout(function() { btn.innerHTML = orig; btn.style.background = '#111'; }, 2500);
   }
 
-  /* ---- UTILS ---- */
   function el(tag, attrs, text) {
     var e = document.createElement(tag);
     if (attrs) Object.keys(attrs).forEach(function(k) { e.setAttribute(k, attrs[k]); });
